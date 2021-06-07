@@ -53,6 +53,7 @@
           // camera.attachControl(canvas, true);
 
             var scene = new BABYLON.Scene(engine);
+            scene.clearColor = BABYLON.Color3.Black;
             var light = new BABYLON.DirectionalLight("dir01", new BABYLON.Vector3(0, -.5, 1), scene);
             var camera = new BABYLON.ArcRotateCamera("Camera", 0, 0, 10, new BABYLON.Vector3.Zero(), scene);
             camera.setPosition(new BABYLON.Vector3(20, 70, -100));
@@ -76,7 +77,7 @@
             ];
 
 
-            var playgroundSize = 100;
+            var playgroundSize = 50;
             var background = BABYLON.Mesh.CreatePlane("background", playgroundSize, scene, false);
             background.material = new BABYLON.StandardMaterial("background", scene);
             background.scaling.y = .5;
@@ -147,7 +148,7 @@
                     x += offset + margin
                 }
             };
-            createSeries(browsers_Series);
+            createSeries(operatingSystem_Series);
             camera.lowerAlphaLimit = Math.PI;
             camera.upperAlphaLimit = 2 * Math.PI;
             camera.lowerBetaLimit = .1;
