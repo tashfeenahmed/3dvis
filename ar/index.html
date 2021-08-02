@@ -181,7 +181,7 @@
                             }
                         });
                     }, 2000); // TODO: Find a better way to wait for the ArUco module to load.
-                }, { maxWidth: 640, maxHeight: 480 });
+                }, { maxWidth: 640, maxHeight: 480, facingMode: "environment" });
             });
         
             return scene;
