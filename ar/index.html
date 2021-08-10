@@ -45,164 +45,222 @@
         var scene = null;
         var sceneToRender = null;
         var createDefaultEngine = function() { return new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true,  disableWebGL2Support: false}); };
-        var createScene = async function () {
-        
-            // This creates a basic Babylon Scene object (non-mesh)
-            var scene = new BABYLON.Scene(engine);
-        
-            // This creates and positions a free camera (non-mesh)
-            var camera = new BABYLON.FreeCamera("camera1", new BABYLON.Vector3(0, 1, -5), scene);
-        
-            // This targets the camera to scene origin
-            camera.setTarget(BABYLON.Vector3.Zero());
-        
-            // This attaches the camera to the canvas
-            camera.attachControl(canvas, true);
-        
-            // This creates a light, aiming 0,1,0 - to the sky (non-mesh)
-            var light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
-        
-            // Default intensity is 1. Let's dim the light a small amount
-            light.intensity = 0.7;
-        
-            var dirLight = new BABYLON.DirectionalLight('light', new BABYLON.Vector3(0, -1, -0.5), scene);
-            dirLight.position = new BABYLON.Vector3(0, 5, -5);
-        
-            var shadowGenerator = new BABYLON.ShadowGenerator(1024, dirLight);
-            shadowGenerator.useBlurExponentialShadowMap = true;
-            shadowGenerator.blurKernel = 32;
-        
+        /***************************************************
+ * WebXR AR demo and e-Commerce
+ * ************************************************
+ * 
+ * Working (at the moment) on android devices and the latest chrome and Google VR Services installed.
+ *
+ * 
+ * - Once in AR, look at the floor or at a flat surface for a few seconds (and move a little): the hit-testing will kick-off.
+ * - You'll see a "ghost" version on the model that you can set in place by clicling anywhere on the screen
+ * - The object will be kept in place by the AR system you are using
+ * - You can change variant (different textures)
+ * 
+ * 
+ * Created by @thomlucc, based on examples from Raanan Weber (@RaananW).
+ * Details on [Blog article URL]
+ */
 
-            //!!!!!!!!!!!!!!!!!!!!!!!!!!!!  GLTF Model to Load  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+var createScene = async function () {
 
-            const b = (await BABYLON.SceneLoader.ImportMeshAsync("", "https://raw.githubusercontent.com/ZwingliJones/samplewebxr/master/", "SingleSkull_.gltf", scene)).meshes[0];
-            b.rotationQuaternion = new BABYLON.Quaternion();
-        
-            var xr = await scene.createDefaultXRExperienceAsync({
-                uiOptions: {
-                    sessionMode: "immersive-ar",
-                    referenceSpaceType: "local-floor"
-                },
-                optionalFeatures: true
-            });
-        
-            const fm = xr.baseExperience.featuresManager;
-        
-            const xrTest = fm.enableFeature(BABYLON.WebXRHitTest.Name, "latest");
-            const xrPlanes = fm.enableFeature(BABYLON.WebXRPlaneDetector.Name, "latest");
-            const anchors = fm.enableFeature(BABYLON.WebXRAnchorSystem.Name, 'latest');
-        
-            const xrBackgroundRemover = fm.enableFeature(BABYLON.WebXRBackgroundRemover.Name);
-           
-            //shadowGenerator.addShadowCaster(b, true);
-        
-            const marker = BABYLON.MeshBuilder.CreateTorus('marker', { diameter: 0.15, thickness: 0.05 });
-            marker.isVisible = false;
-            marker.rotationQuaternion = new BABYLON.Quaternion();
+    // Creates a basic Babylon Scene object (non-mesh)
+    var scene = new BABYLON.Scene(engine);
 
-            let hitTest;
-        
-            b.isVisible = false;
-        
-            xrTest.onHitTestResultObservable.add((results) => {
-                if (results.length) {
-                    marker.isVisible = true;
-                    hitTest = results[0];
-                    hitTest.transformationMatrix.decompose(undefined, b.rotationQuaternion, b.position);
-                    hitTest.transformationMatrix.decompose(undefined, marker.rotationQuaternion, marker.position);
-                } else {
-                    marker.isVisible = false;
-                    hitTest = undefined;
-                }
-            });
-            const mat1 = new BABYLON.StandardMaterial('1', scene);
-            mat1.diffuseColor = BABYLON.Color3.Red();
-            const mat2 = new BABYLON.StandardMaterial('1', scene);
-            mat2.diffuseColor = BABYLON.Color3.Blue();
-        
-            if (anchors) {
-                console.log('anchors attached');
-                anchors.onAnchorAddedObservable.add(anchor => {
-                    console.log('attaching', anchor);
-                    b.isVisible = true;
-                    anchor.attachedNode = b.clone();
-                    b.isVisible = false;
-                })
-        
-                anchors.onAnchorRemovedObservable.add(anchor => {
-                    console.log('disposing', anchor);
-                    if (anchor) {
-                        anchor.attachedNode.isVisible = false;
-                        anchor.attachedNode.dispose();
-                    }
-                });
+    // Creates and positions a free camera (non-mesh)
+    var camera = new BABYLON.FreeCamera("camera1", new BABYLON.Vector3(0, 1, -5), scene);
+
+    // Cargets the camera to scene origin
+    camera.setTarget(BABYLON.Vector3.Zero());
+
+    // Attaches the camera to the canvas
+    camera.attachControl(canvas, true);
+
+    // Creates lights
+    var light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+    light.intensity = 0.7;
+    var dirLight = new BABYLON.DirectionalLight("dirlight", new BABYLON.Vector3(0, -1, -0.5), scene);
+    dirLight.position = new BABYLON.Vector3(0, 5, -5);
+
+
+    // AR availability check and GUI in non-AR mode
+    let arAvailable = await BABYLON.WebXRSessionManager.IsSessionSupportedAsync('immersive-ar');
+
+    const advancedTexture = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI(
+        "FullscreenUI"
+    );
+
+    var rectangle = new BABYLON.GUI.Rectangle("rect");
+    rectangle.background = "black";
+    rectangle.color = "blue";
+    rectangle.width = "80%";
+    rectangle.height = "50%";
+
+    advancedTexture.addControl(rectangle);
+    var nonXRPanel = new BABYLON.GUI.StackPanel();
+    rectangle.addControl(nonXRPanel);
+
+    if (!arAvailable) {
+        const text1 = new BABYLON.GUI.TextBlock("text1");
+        text1.fontFamily = "Helvetica";
+        text1.textWrapping = true;
+        text1.text = "AR is not available in your system. Please make sure you use a supported mobile device such as a modern Android device and a supported browser like Chrome.";
+        text1.color = "white";
+        text1.fontSize = "20px";
+        text1.height = "100px"
+
+        text1.paddingLeft = "10px";
+        text1.paddingRight = "10px";
+        nonXRPanel.addControl(text1);
+
+        const text2 = new BABYLON.GUI.TextBlock("text1");
+        text2.fontFamily = "Helvetica";
+        text2.textWrapping = true;
+        text2.text = "Make sure you have Google AR services installed and that you enabled the WebXR incubation flag under chrome://flags";
+        text2.color = "white";
+        text2.fontSize = "20px";
+        text2.height = "100px";
+        text2.paddingLeft = "10px";
+        text2.paddingRight = "10px";
+        nonXRPanel.addControl(text2);
+        return scene;
+    } else {
+        const text1 = new BABYLON.GUI.TextBlock("text1");
+        text1.fontFamily = "Helvetica";
+        text1.textWrapping = true;
+        text1.text = "WebXR Demo: E-Commerce. Please enter AR with the button on the lower right corner to start. Once in AR, look at the floor or at a flat surface for a few seconds (and move a little): the hit-testing ring will appear. Then click anywhere on the screen...";
+        text1.color = "white";
+        text1.fontSize = "14px";
+        text1.height = "400px"
+
+        text1.paddingLeft = "10px";
+        text1.paddingRight = "10px";
+        nonXRPanel.addControl(text1);
+    }
+
+    // Create the WebXR Experience Helper for an AR Session (it initializes the XR scene, creates an XR Camera, 
+    // initialize the features manager, create an HTML UI button to enter XR,...)
+    var xr = await scene.createDefaultXRExperienceAsync({
+        uiOptions: {
+            sessionMode: "immersive-ar",
+            referenceSpaceType: "local-floor",
+            onError: (error) => {
+                alert(error);
             }
-        
-            scene.onPointerDown = (evt, pickInfo) => {
-                if (hitTest && anchors && xr.baseExperience.state === BABYLON.WebXRState.IN_XR) {
-                    anchors.addAnchorPointUsingHitTestResultAsync(hitTest);
-                }
-            }
-        
-            const planes = [];
-        
-            xrPlanes.onPlaneAddedObservable.add(plane => {
-                plane.polygonDefinition.push(plane.polygonDefinition[0]);
-                var polygon_triangulation = new BABYLON.PolygonMeshBuilder("name", plane.polygonDefinition.map((p) => new BABYLON.Vector2(p.x, p.z)), scene);
-                var polygon = polygon_triangulation.build(false, 0.01);
-                plane.mesh = polygon; //BABYLON.TubeBuilder.CreateTube("tube", { path: plane.polygonDefinition, radius: 0.02, sideOrientation: BABYLON.Mesh.FRONTSIDE, updatable: true }, scene);
-                //}
-                planes[plane.id] = (plane.mesh);
-                const mat = new BABYLON.StandardMaterial("mat", scene);
-                mat.alpha = 0.5;
-                mat.diffuseColor = BABYLON.Color3.Random();
-                polygon.createNormals();
-                // polygon.receiveShadows = true;
-                plane.mesh.material = mat;
-        
-                plane.mesh.rotationQuaternion = new BABYLON.Quaternion();
-                plane.transformationMatrix.decompose(plane.mesh.scaling, plane.mesh.rotationQuaternion, plane.mesh.position);
-            });
-        
-            xrPlanes.onPlaneUpdatedObservable.add(plane => {
-                let mat;
-                if (plane.mesh) {
-                    mat = plane.mesh.material;
-                    plane.mesh.dispose(false, false);
-                }
-                const some = plane.polygonDefinition.some(p => !p);
-                if (some) {
-                    return;
-                }
-                plane.polygonDefinition.push(plane.polygonDefinition[0]);
-                var polygon_triangulation = new BABYLON.PolygonMeshBuilder("name", plane.polygonDefinition.map((p) => new BABYLON.Vector2(p.x, p.z)), scene);
-                var polygon = polygon_triangulation.build(false, 0.01);
-                polygon.createNormals();
-                plane.mesh = polygon;// BABYLON.TubeBuilder.CreateTube("tube", { path: plane.polygonDefinition, radius: 0.02, sideOrientation: BABYLON.Mesh.FRONTSIDE, updatable: true }, scene);
-                //}
-                planes[plane.id] = (plane.mesh);
-                plane.mesh.material = mat;
-                plane.mesh.rotationQuaternion = new BABYLON.Quaternion();
-                plane.transformationMatrix.decompose(plane.mesh.scaling, plane.mesh.rotationQuaternion, plane.mesh.position);
-                plane.mesh.receiveShadows = true;
-            })
-        
-            xrPlanes.onPlaneRemovedObservable.add(plane => {
-                if (plane && planes[plane.id]) {
-                    planes[plane.id].dispose()
-                }
-            })
-        
-            xr.baseExperience.sessionManager.onXRSessionInit.add(() => {
-                planes.forEach(plane => plane.dispose());
-                while (planes.pop()) { };
-            });
-        
-        
-        
-            return scene;
-        
+        },
+        optionalFeatures: true
+    });
+
+    //Hide/Show GUI depending of AR/nonAR mode
+    xr.baseExperience.sessionManager.onXRSessionInit.add(() => {
+        rectangle.isVisible = false;
+        panel.isVisible = true;
+    })
+    xr.baseExperience.sessionManager.onXRSessionEnded.add(() => {
+        rectangle.isVisible = true;
+        panel.isVisible = false;
+    })
+
+    // Add the GUI for AR Mode
+    var panel = new BABYLON.GUI.StackPanel();
+    panel.isVisible = false;
+    panel.alpha = 0.75;
+    panel.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_BOTTOM;
+    panel.paddingBottomInPixels = 40;
+    advancedTexture.addControl(panel);
+
+    const button = BABYLON.GUI.Button.CreateSimpleButton("button1", "Variant");
+    button.width = 0.25;
+    button.height = "120px";
+    button.color = "white";
+    button.background = "green";
+    button.textBlock.fontSize = "26px";
+    var variantIndex = 0
+    button.onPointerClickObservable.add(() => {
+        //Loop through the different variants
+        if (bVariants.length > 0) {
+            if (variantIndex < (bVariants.length - 1)) { variantIndex = variantIndex + 1 }
+            else { variantIndex = 0 }
+            BABYLON.GLTF2.Loader.Extensions.KHR_materials_variants.SelectVariant(b, bVariants[variantIndex])
+        }
+        else {
+            button.isVisible = false;
         };
+    })
+    panel.addControl(button);
+
+    const buttonSet = BABYLON.GUI.Button.CreateSimpleButton("buttonSet", "Set");
+    buttonSet.width = 0.25;
+    buttonSet.height = "120px";
+    buttonSet.color = "white";
+    buttonSet.background = "green";
+    buttonSet.textBlock.fontSize = "26px";
+    var myObjectIsSet = false;
+    buttonSet.onPointerClickObservable.add(() => {
+        panel.isVisible = false;
+        myObjectIsSet = true;
+    })
+    panel.addControl(buttonSet);
+
+    // Get the Feature Manager and from it the HitTesting fearture 
+    const fm = xr.baseExperience.featuresManager;
+    const xrTest = fm.enableFeature(BABYLON.WebXRHitTest.Name, "latest");
+
+    // Get XR Camera Created by Basic Experience Helper 
+    const xrCamera = xr.baseExperience.camera
+
+    // Load the 3D model to be added in AR
+    var model = await BABYLON.SceneLoader.ImportMeshAsync("", "https://assets.babylonjs.com/meshes/", "sheenChair.glb", scene);
+    var b = model.meshes[0];
+
+    //Clone the mesh to create a ghost mesh that will used for positionning
+    var bGhost = b.clone("bModel");
+    for (var child of bGhost.getChildMeshes()) {
+        child.material = new BABYLON.StandardMaterial("mat");
+        child.material.alpha = 0.25;
+        child.material.diffuseTexture = new BABYLON.Texture("textures/speckles.jpg");
+    }
+
+    //Rotate the objects and get Variants
+    bGhost.rotationQuaternion = new BABYLON.Quaternion();
+    b.rotationQuaternion = new BABYLON.Quaternion();
+    var bVariants = [];
+    bVariants = BABYLON.GLTF2.Loader.Extensions.KHR_materials_variants.GetAvailableVariants(b);
+
+    //Ensure model and ghost are not visible at the beginning
+    b.setEnabled(false);
+    bGhost.setEnabled(false);
+
+    // Update the position/rotation of the ghost model with HitTest information
+    var hitTest;
+    xrTest.onHitTestResultObservable.add((results) => {
+        if (results.length) {
+            bGhost.setEnabled(true);
+            hitTest = results[0];
+            hitTest.transformationMatrix.decompose(undefined, bGhost.rotationQuaternion, bGhost.position);
+        } else {
+            bGhost.setEnabled(false);
+            hitTest = undefined;
+        }
+    });
+
+    // When touching the screen, display final model at the hitTest position
+    scene.onPointerDown = (evt, pickInfo) => {
+        if (hitTest && !myObjectIsSet && xr.baseExperience.state === BABYLON.WebXRState.IN_XR) {
+            hitTest.transformationMatrix.decompose(undefined, b.rotationQuaternion, b.position);
+            b.setEnabled(true);
+        }
+    }
+
+    //Rendering loop 
+    scene.onBeforeRenderObservable.add(() => {
+        // Disable ghost model once the "Set" button has been pressed
+        if (myObjectIsSet) bGhost.setEnabled(false);
+    });
+
+    return scene;
+
+};
                 window.initFunction = async function() {
                     
                     var asyncEngineCreation = async function() {
