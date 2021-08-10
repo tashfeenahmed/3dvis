@@ -45,222 +45,147 @@
         var scene = null;
         var sceneToRender = null;
         var createDefaultEngine = function() { return new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true,  disableWebGL2Support: false}); };
-        /***************************************************
- * WebXR AR demo and e-Commerce
- * ************************************************
- * 
- * Working (at the moment) on android devices and the latest chrome and Google VR Services installed.
- *
- * 
- * - Once in AR, look at the floor or at a flat surface for a few seconds (and move a little): the hit-testing will kick-off.
- * - You'll see a "ghost" version on the model that you can set in place by clicling anywhere on the screen
- * - The object will be kept in place by the AR system you are using
- * - You can change variant (different textures)
- * 
- * 
- * Created by @thomlucc, based on examples from Raanan Weber (@RaananW).
- * Details on [Blog article URL]
- */
-
-var createScene = async function () {
-
-    // Creates a basic Babylon Scene object (non-mesh)
-    var scene = new BABYLON.Scene(engine);
-
-    // Creates and positions a free camera (non-mesh)
-    var camera = new BABYLON.FreeCamera("camera1", new BABYLON.Vector3(0, 1, -5), scene);
-
-    // Cargets the camera to scene origin
-    camera.setTarget(BABYLON.Vector3.Zero());
-
-    // Attaches the camera to the canvas
-    camera.attachControl(canvas, true);
-
-    // Creates lights
-    var light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
-    light.intensity = 0.7;
-    var dirLight = new BABYLON.DirectionalLight("dirlight", new BABYLON.Vector3(0, -1, -0.5), scene);
-    dirLight.position = new BABYLON.Vector3(0, 5, -5);
-
-
-    // AR availability check and GUI in non-AR mode
-    let arAvailable = await BABYLON.WebXRSessionManager.IsSessionSupportedAsync('immersive-ar');
-
-    const advancedTexture = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI(
-        "FullscreenUI"
-    );
-
-    var rectangle = new BABYLON.GUI.Rectangle("rect");
-    rectangle.background = "black";
-    rectangle.color = "blue";
-    rectangle.width = "80%";
-    rectangle.height = "50%";
-
-    advancedTexture.addControl(rectangle);
-    var nonXRPanel = new BABYLON.GUI.StackPanel();
-    rectangle.addControl(nonXRPanel);
-
-    if (!arAvailable) {
-        const text1 = new BABYLON.GUI.TextBlock("text1");
-        text1.fontFamily = "Helvetica";
-        text1.textWrapping = true;
-        text1.text = "AR is not available in your system. Please make sure you use a supported mobile device such as a modern Android device and a supported browser like Chrome.";
-        text1.color = "white";
-        text1.fontSize = "20px";
-        text1.height = "100px"
-
-        text1.paddingLeft = "10px";
-        text1.paddingRight = "10px";
-        nonXRPanel.addControl(text1);
-
-        const text2 = new BABYLON.GUI.TextBlock("text1");
-        text2.fontFamily = "Helvetica";
-        text2.textWrapping = true;
-        text2.text = "Make sure you have Google AR services installed and that you enabled the WebXR incubation flag under chrome://flags";
-        text2.color = "white";
-        text2.fontSize = "20px";
-        text2.height = "100px";
-        text2.paddingLeft = "10px";
-        text2.paddingRight = "10px";
-        nonXRPanel.addControl(text2);
-        return scene;
-    } else {
-        const text1 = new BABYLON.GUI.TextBlock("text1");
-        text1.fontFamily = "Helvetica";
-        text1.textWrapping = true;
-        text1.text = "WebXR Demo: E-Commerce. Please enter AR with the button on the lower right corner to start. Once in AR, look at the floor or at a flat surface for a few seconds (and move a little): the hit-testing ring will appear. Then click anywhere on the screen...";
-        text1.color = "white";
-        text1.fontSize = "14px";
-        text1.height = "400px"
-
-        text1.paddingLeft = "10px";
-        text1.paddingRight = "10px";
-        nonXRPanel.addControl(text1);
-    }
-
-    // Create the WebXR Experience Helper for an AR Session (it initializes the XR scene, creates an XR Camera, 
-    // initialize the features manager, create an HTML UI button to enter XR,...)
-    var xr = await scene.createDefaultXRExperienceAsync({
-        uiOptions: {
-            sessionMode: "immersive-ar",
-            referenceSpaceType: "local-floor",
-            onError: (error) => {
-                alert(error);
+        // Marker locations: https://syntheticmagus.github.io/webpiled-aruco-ar/markers/
+        
+        const MIRROR_AR = false;
+        const ARUCO_MODULE_NAME = "acuroModule";
+        const ARUCO_MODULE_LOCATION = "https://syntheticmagus.github.io/webpiled-aruco-ar/v0.01/webpiled-aruco-ar.js";
+        const FILTER_STRENGTH = 0.4;
+        
+        // TODO: Allow the use of other ArUco marker dictionaries.
+        // TODO: Do the aruco stuff in a WebWorker?
+        function ensureAruco() {
+            if (document.getElementById(ARUCO_MODULE_NAME) === null) {
+                var moduleScript = document.createElement("script");
+                moduleScript.id = ARUCO_MODULE_NAME;
+                moduleScript.src = ARUCO_MODULE_LOCATION;
+                document.body.appendChild(moduleScript);
             }
-        },
-        optionalFeatures: true
-    });
-
-    //Hide/Show GUI depending of AR/nonAR mode
-    xr.baseExperience.sessionManager.onXRSessionInit.add(() => {
-        rectangle.isVisible = false;
-        panel.isVisible = true;
-    })
-    xr.baseExperience.sessionManager.onXRSessionEnded.add(() => {
-        rectangle.isVisible = true;
-        panel.isVisible = false;
-    })
-
-    // Add the GUI for AR Mode
-    var panel = new BABYLON.GUI.StackPanel();
-    panel.isVisible = false;
-    panel.alpha = 0.75;
-    panel.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_BOTTOM;
-    panel.paddingBottomInPixels = 40;
-    advancedTexture.addControl(panel);
-
-    const button = BABYLON.GUI.Button.CreateSimpleButton("button1", "Variant");
-    button.width = 0.25;
-    button.height = "120px";
-    button.color = "white";
-    button.background = "green";
-    button.textBlock.fontSize = "26px";
-    var variantIndex = 0
-    button.onPointerClickObservable.add(() => {
-        //Loop through the different variants
-        if (bVariants.length > 0) {
-            if (variantIndex < (bVariants.length - 1)) { variantIndex = variantIndex + 1 }
-            else { variantIndex = 0 }
-            BABYLON.GLTF2.Loader.Extensions.KHR_materials_variants.SelectVariant(b, bVariants[variantIndex])
         }
-        else {
-            button.isVisible = false;
+        
+        function findMarkersInImage(videoTexture, callback) {
+            var width = videoTexture.getSize().width;
+            var height = videoTexture.getSize().height;
+            var imageData = videoTexture.readPixels();
+        
+            var buf = Module._malloc(imageData.length * imageData.BYTES_PER_ELEMENT);
+            Module.HEAPU8.set(imageData, buf);
+            var numMarkers = Module._process_image(width, height, buf, 1);
+            Module._free(buf);
+        
+            for (var markerIdx = 0; markerIdx < numMarkers; markerIdx++) {
+                var ptr = Module._get_tracked_marker(0);
+        
+                var offset = 0;
+                var id = Module.getValue(ptr + offset, "i32");
+                offset += 12;
+                var tx = Module.getValue(ptr + offset, "double");
+                offset += 8;
+                var ty = Module.getValue(ptr + offset, "double");
+                offset += 8;
+                var tz = Module.getValue(ptr + offset, "double");
+                offset += 8;
+                var rx = Module.getValue(ptr + offset, "double");
+                offset += 8;
+                var ry = Module.getValue(ptr + offset, "double");
+                offset += 8;
+                var rz = Module.getValue(ptr + offset, "double");
+        
+                if (callback) {
+                    callback(id, tx, ty, tz, rx, ry, rz);
+                }
+            }
+        
+            return numMarkers;
+        }
+        
+        var createScene = function () {
+            var scene = new BABYLON.Scene(engine);
+            var camera = new BABYLON.FreeCamera('camera1', new BABYLON.Vector3(0, 0, 0), scene);
+            var light = new BABYLON.HemisphericLight('light1', new BABYLON.Vector3(0, 1, 0), scene);
+        
+            // TODO: Codify the placement of this plane to automatically adapt to camera parameters.
+            var ground = BABYLON.Mesh.CreatePlane("ground1", 220, scene);
+            ground.position.z = 1000;
+            ground.scaling.x = MIRROR_AR ? -4 : 4;
+            ground.scaling.y = -3; // Handedness
+        
+            var mat = new BABYLON.StandardMaterial("mat", scene);
+            ground.material = mat;
+        
+            BABYLON.SceneLoader.ImportMeshAsync("", "https://raw.githubusercontent.com/BabylonJS/MeshesLibrary/master/BabylonJS-logo/v3/babylonJS_logo_solid_v3.babylon").then(function (result) {
+                var box = result.meshes[0];
+                box.rotationQuaternion = BABYLON.Quaternion.Identity();
+        
+                ensureAruco();
+                BABYLON.VideoTexture.CreateFromWebCam(scene, function (videoTexture) {
+                    mat.diffuseTexture = videoTexture;
+        
+                    setTimeout(function () {
+                        Module._reset();
+        
+                        var ftx = 0.0;
+                        var fty = 0.0;
+                        var ftz = 0.0;
+                        var frx = 0.0;
+                        var fry = 0.0;
+                        var frz = 0.0;
+        
+                        var framesSinceSeen = 0;
+        
+                        scene.onAfterRenderObservable.add(function () {
+                            var numMarkers = findMarkersInImage(videoTexture, function (id, tx, ty, tz, rx, ry, rz) {
+                                ftx = MIRROR_AR ? -tx : tx;
+                                fty = -ty; // Handedness.
+                                ftz = tz;
+        
+                                frx = rx;
+                                fry = ry;
+                                frz = rz;
+                            });
+        
+                            // Convert rotations from Rodrigues to quaternion and filter noise.
+                            // TODO: The noise on the rotation looks like it toggles between right answers and wrong answers.
+                            // User a median filter to improve the quality.
+                            var rot = new BABYLON.Vector3(-frx, fry, -frz);
+                            var theta = rot.length();
+                            rot.scaleInPlace(1.0 / theta);
+                            if (theta !== 0.0) {
+                                var quat = BABYLON.Quaternion.RotationAxis(rot, theta);
+                                box.rotationQuaternion = BABYLON.Quaternion.Slerp(box.rotationQuaternion, quat, 1.0 - FILTER_STRENGTH);
+                            }
+        
+                            if (numMarkers === 0) {
+                                framesSinceSeen += 1;
+                            }
+                            else {
+                                framesSinceSeen = 0;
+                            }
+        
+                            box.position.x *= FILTER_STRENGTH;
+                            box.position.x += (1.0 - FILTER_STRENGTH) * ftx;
+                            box.position.y *= FILTER_STRENGTH;
+                            box.position.y += (1.0 - FILTER_STRENGTH) * fty;
+                            box.position.z *= FILTER_STRENGTH;
+                            box.position.z += (1.0 - FILTER_STRENGTH) * ftz;
+        
+                            if (framesSinceSeen < 10 || Math.abs(box.position.x - ftx) > 0.01) {
+                                for (var idx = 0; idx < result.meshes.length; idx++) {
+                                    result.meshes[idx].visibility = 1;
+                                }
+                            }
+                            else {
+                                for (var idx = 0; idx < result.meshes.length; idx++) {
+                                    result.meshes[idx].visibility = 0;
+                                }
+                            }
+                        });
+                    }, 2000); // TODO: Find a better way to wait for the ArUco module to load.
+                }, { maxWidth: 640, maxHeight: 480, facingMode: "environment" });
+            });
+        
+            return scene;
         };
-    })
-    panel.addControl(button);
-
-    const buttonSet = BABYLON.GUI.Button.CreateSimpleButton("buttonSet", "Set");
-    buttonSet.width = 0.25;
-    buttonSet.height = "120px";
-    buttonSet.color = "white";
-    buttonSet.background = "green";
-    buttonSet.textBlock.fontSize = "26px";
-    var myObjectIsSet = false;
-    buttonSet.onPointerClickObservable.add(() => {
-        panel.isVisible = false;
-        myObjectIsSet = true;
-    })
-    panel.addControl(buttonSet);
-
-    // Get the Feature Manager and from it the HitTesting fearture 
-    const fm = xr.baseExperience.featuresManager;
-    const xrTest = fm.enableFeature(BABYLON.WebXRHitTest.Name, "latest");
-
-    // Get XR Camera Created by Basic Experience Helper 
-    const xrCamera = xr.baseExperience.camera
-
-    // Load the 3D model to be added in AR
-    var model = await BABYLON.SceneLoader.ImportMeshAsync("", "https://assets.babylonjs.com/meshes/", "sheenChair.glb", scene);
-    var b = model.meshes[0];
-
-    //Clone the mesh to create a ghost mesh that will used for positionning
-    var bGhost = b.clone("bModel");
-    for (var child of bGhost.getChildMeshes()) {
-        child.material = new BABYLON.StandardMaterial("mat");
-        child.material.alpha = 0.25;
-        child.material.diffuseTexture = new BABYLON.Texture("textures/speckles.jpg");
-    }
-
-    //Rotate the objects and get Variants
-    bGhost.rotationQuaternion = new BABYLON.Quaternion();
-    b.rotationQuaternion = new BABYLON.Quaternion();
-    var bVariants = [];
-    bVariants = BABYLON.GLTF2.Loader.Extensions.KHR_materials_variants.GetAvailableVariants(b);
-
-    //Ensure model and ghost are not visible at the beginning
-    b.setEnabled(false);
-    bGhost.setEnabled(false);
-
-    // Update the position/rotation of the ghost model with HitTest information
-    var hitTest;
-    xrTest.onHitTestResultObservable.add((results) => {
-        if (results.length) {
-            bGhost.setEnabled(true);
-            hitTest = results[0];
-            hitTest.transformationMatrix.decompose(undefined, bGhost.rotationQuaternion, bGhost.position);
-        } else {
-            bGhost.setEnabled(false);
-            hitTest = undefined;
-        }
-    });
-
-    // When touching the screen, display final model at the hitTest position
-    scene.onPointerDown = (evt, pickInfo) => {
-        if (hitTest && !myObjectIsSet && xr.baseExperience.state === BABYLON.WebXRState.IN_XR) {
-            hitTest.transformationMatrix.decompose(undefined, b.rotationQuaternion, b.position);
-            b.setEnabled(true);
-        }
-    }
-
-    //Rendering loop 
-    scene.onBeforeRenderObservable.add(() => {
-        // Disable ghost model once the "Set" button has been pressed
-        if (myObjectIsSet) bGhost.setEnabled(false);
-    });
-
-    return scene;
-
-};
                 window.initFunction = async function() {
                     
                     var asyncEngineCreation = async function() {
@@ -275,8 +200,7 @@ var createScene = async function () {
                     window.engine = await asyncEngineCreation();
         if (!engine) throw 'engine should not be null.';
         window.scene = createScene();};
-        initFunction().then(() => {scene.then(returnedScene => { sceneToRender = returnedScene; });
-                
+        initFunction().then(() => {sceneToRender = scene        
             engine.runRenderLoop(function () {
                 if (sceneToRender && sceneToRender.activeCamera) {
                     sceneToRender.render();
