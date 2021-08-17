@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="babyplots.js"></script>
+  <script src="heatmap.js"></script>
+  <title>Immersive Plot</title>
+  <style type="text/css">
+    * {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body style="background-color: black;">
+  <canvas id="babyplot" style="width:100vw; height: 100vh;"></canvas>
+  <script>
+  vis = new Baby.Plots("babyplot");
+  vis.fromJSON(heatMapData);
+  vis.doRender();
+  </script>
+</body>
+</html>
+
+
