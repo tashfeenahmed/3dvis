@@ -3,7 +3,7 @@
     <head>
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 
-        <title>v0.4 Scatterplot</title>
+        <title>v0.6 Scatterplot</title>
 
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
 
@@ -127,7 +127,13 @@
                 uiOptions: {
                     sessionMode: "immersive-ar",
                 },
+                optionalFeatures: true,
             });
+
+            // const fm = xr.baseExperience.featuresManager;
+            // const xrTest = fm.enableFeature(BABYLON.WebXRHitTest, "latest");
+            // const anchors = fm.enableFeature(BABYLON.WebXRAnchorSystem, 'latest');
+            // const xrBackgroundRemover = fm.enableFeature(BABYLON.WebXRBackgroundRemover.Name);
 
             
 
@@ -513,7 +519,6 @@
             sceneToRender = scene
             engine.runRenderLoop(function() {
                 if (sceneToRender && sceneToRender.activeCamera) {
-                    scene.activeCamera.position.y = 5;
                     sceneToRender.render();
 
 
