@@ -3,7 +3,7 @@
     <head>
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 
-        <title>v0.3 Scatterplot</title>
+        <title>v0.4 Scatterplot</title>
 
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
 
@@ -128,6 +128,7 @@
                     sessionMode: "immersive-ar",
                 },
             });
+
             
 
             return scene;
@@ -512,7 +513,9 @@
             sceneToRender = scene
             engine.runRenderLoop(function() {
                 if (sceneToRender && sceneToRender.activeCamera) {
+                    scene.activeCamera.position.y = 5;
                     sceneToRender.render();
+
 
                 }
             });
